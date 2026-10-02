@@ -58,7 +58,7 @@ export default function Ayuda({ alCerrar }: { alCerrar: () => void }) {
           </Seccion>
 
           <Seccion titulo="Elegir el día">
-            <p>La app tiene tres pestañas: {b('Turnos')} (C1, C2 y Blindex), {b('Fijos')} e {b('Imagen')}.</p>
+            <p>La app tiene tres pestañas: {b('Fijos')}, {b('Turnos')} (C1, C2 y Blindex) e {b('Imagen')}.</p>
             <p>Con las flechas ‹ › pasás al día anterior o al siguiente. Para ir a una fecha puntual, tocá la fecha y se abre el calendario. El botón {b('Hoy')} te vuelve al día actual.</p>
           </Seccion>
 
