@@ -1,109 +1,70 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { DIAS_ADELANTE, DIAS_HISTORIA } from '../config/limites'
-import { hoyISO, sumarDias } from '../lib/fechas'
+# Turnos · Defensores Pádel
 
-const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+App para gestionar las reservas de canchas de **Defensores** (C1, C2 y Blindex) y generar la imagen de turnos
+libres para compartir por WhatsApp.
 
-function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) {
-  return (
-    <section className="border-t border-linea pt-5">
-      <h3 className="font-tablero text-2xl font-bold text-noche">{titulo}</h3>
-      <div className="mt-2 space-y-2 leading-relaxed text-tinta">{children}</div>
-    </section>
-  )
-}
+- Varias personas cargan reservas a la vez desde el celu o la compu: los cambios se ven al instante en todos los dispositivos (Supabase Realtime).
+- Tres pestañas: **Turnos** (tabla Libre / Reservada, con "¿para quién es la reserva?"), **Fijos** (turnos que se repiten todas las semanas) e **Imagen** (se arma sola con el estado de la tabla; los turnos reservados llevan una pelotita).
+- Login genérico: usuario **DEFENSORES**. La contraseña se guarda hasheada (bcrypt) en la base, no en el código.
 
-export default function Ayuda({ alCerrar }: { alCerrar: () => void }) {
-  const cerrar = useRef<HTMLButtonElement>(null)
-  const hoy = hoyISO()
-  const desde = ddmm(sumarDias(hoy, -DIAS_HISTORIA))
-  const hasta = ddmm(sumarDias(hoy, DIAS_ADELANTE))
+Stack: Vite + React + TypeScript + Tailwind + Supabase. Publicada con GitHub Pages.
 
-  // ref para no re-ejecutar el efecto en cada render (la tabla se actualiza en tiempo real)
-  const alCerrarRef = useRef(alCerrar)
-  alCerrarRef.current = alCerrar
+## 1. Base de datos
 
-  useEffect(() => {
-    cerrar.current?.focus()
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && alCerrarRef.current()
-    document.addEventListener('keydown', esc)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', esc)
-      document.body.style.overflow = ''
-    }
-  }, [])
+Usa la misma base de Supabase que El Clásico y la app de torneos. Todo lleva el prefijo `reservas_defensores_`,
+así que no toca nada existente.
 
-  const b = (t: string) => <strong className="text-noche">{t}</strong>
+En **SQL Editor**:
 
-  return (
-    <div role="dialog" aria-modal="true" aria-labelledby="titulo-ayuda"
-      className="fixed inset-0 z-30 flex justify-center bg-noche/60 pt-[env(safe-area-inset-top,0px)]" onClick={alCerrar}>
-      <div className="mt-6 flex w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:mb-6 sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between bg-noche px-5 py-4 text-white">
-          <h2 id="titulo-ayuda" className="font-tablero text-3xl font-extrabold">Cómo se usa</h2>
-          <button ref={cerrar} onClick={alCerrar} className="rounded-full border border-white/30 px-4 py-1.5 text-sm font-semibold">Cerrar</button>
-        </div>
+1. Corré `supabase/reservas-defensores.sql`. Crea tablas, funciones, permisos, tiempo real y los 4 contactos iniciales. Se puede volver a correr sin romper nada.
+2. Corré `crear-usuario-defensores.sql` (se entrega aparte y **no se sube al repo** porque tiene la contraseña).
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] pt-5">
-          <p className="leading-relaxed text-tinta">
-            Esta app reemplaza a la imagen que se iba editando a mano: todos los que toman reservas cargan en la
-            misma tabla y la imagen para WhatsApp se arma sola.
-          </p>
+Tablas: `reservas_defensores_acceso`, `_sesiones`, `_turnos`, `_contactos`, `_fijos` y `_fijos_excepciones`.
 
-          <Seccion titulo="Ingresar">
-            <p>Entrá con el usuario y la contraseña del complejo. En {b('Tu nombre')}, que es obligatorio, poné cómo te llaman: aparece en cada turno que marques, así se sabe quién lo tomó.</p>
-            <p>La sesión queda abierta en ese celu o compu durante 60 días. Si la usás en un equipo compartido, tocá {b('Salir')} al terminar.</p>
-          </Seccion>
+Los nombres de tablas y funciones que usa el front están todos en `src/config/db.ts`.
 
-          <Seccion titulo="Elegir el día">
-            <p>La app tiene tres pestañas: {b('Fijos')}, {b('Turnos')} (C1, C2 y Blindex) e {b('Imagen')}.</p>
-            <p>Con las flechas ‹ › pasás al día anterior o al siguiente. Para ir a una fecha puntual, tocá la fecha y se abre el calendario. El botón {b('Hoy')} te vuelve al día actual.</p>
-          </Seccion>
+## 2. Publicar
 
-          <Seccion titulo="Cargar una reserva">
-            <p>En la pestaña {b('Turnos')}, tocá el horario libre en la cancha que corresponde. Se abre un cuadro que pregunta {b('¿Para quién es la reserva?')}: escribí el nombre y tocá {b('Reservar')}.</p>
-            <p>Si tocás un turno ya reservado, ves para quién es, quién lo reservó y cuándo. Desde ahí lo podés liberar con {b('Liberar turno')}.</p>
-            <p>Abajo aparece un aviso con {b('Deshacer')} durante unos segundos, por si te equivocaste.</p>
-            <p>Cada turno reservado muestra quién lo marcó y a qué hora. Los horarios que ya pasaron se ven más claros.</p>
-            <p>Si otra persona reserva o libera un turno, lo ves al instante en tu pantalla, sin recargar.</p>
-          </Seccion>
+1. **Settings → Environments → github-pages → Environment variables**: cargá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (los mismos valores que El Clásico).
+2. **Settings → Pages → Source**: elegí **GitHub Actions**.
+3. Push a `main`: el workflow compila y publica en `https://federicoolego.github.io/<nombre-del-repo>/`.
 
-          <Seccion titulo="Turnos fijos">
-            <p>En la pestaña {b('Fijos')} cargás los turnos que se repiten todas las semanas: día, hora, cancha y para quién. Se reservan solos para los próximos {DIAS_ADELANTE} días, y la ventana se corre sola.</p>
-            <p>Si alguna de esas fechas ya está reservada, la app te avisa cuáles son y qué otras canchas están libres ese día. Si hay una cancha libre todas las semanas, te ofrece usarla. Si guardás igual, esas fechas se saltean y no se pisa la reserva que ya estaba.</p>
-            <p>En la tabla, los turnos fijos dicen {b('Fijo')}. Si un día no vienen, tocá el turno y elegí {b('Liberar solo este día')}: las otras semanas siguen reservadas.</p>
-            <p>Si editás o eliminás un turno fijo, cambian sus reservas de hoy en adelante. Las pasadas quedan como historial.</p>
-          </Seccion>
+## Turnos fijos
 
-          <Seccion titulo="Compartir la imagen">
-            <p>En la pestaña {b('Imagen')} está la imagen del día elegido, actualizada con la tabla. No hay que generarla: cambia sola con cada reserva.</p>
-            <p>En el celu, tocá {b('Compartir por WhatsApp')} y elegí el chat o el estado. En la compu, tocá {b('Descargar imagen')} y arrastrala a WhatsApp Web.</p>
-          </Seccion>
+Cada fijo se materializa como reservas reales en `reservas_defensores_turnos` (columna `fijo_id`) hasta el último día
+del mes próximo; nunca pisa un turno ya reservado. La app llama a `reservas_defensores_fijos_sincronizar()` al abrir, y
+así la ventana se corre sola (el día 1 de cada mes se suma un mes). Si querés que pase aunque nadie abra la app,
+programalo con pg_cron (comentado al final del script).
 
-          <Seccion titulo="Contactos de la imagen">
-            <p>Los teléfonos del pie de la imagen se editan en la pestaña {b('Imagen')}, tocando {b('Contactos de la imagen')}. Ahí podés agregar, editar, eliminar y cambiar el orden con las flechas ↑ ↓.</p>
-            <p>Entran hasta 4 contactos. El orden de la lista es el de la imagen, y los cambios se ven al instante en todos los dispositivos.</p>
-          </Seccion>
+## Fechas
 
-          <Seccion titulo="Qué fechas se pueden usar">
-            <p>Se pueden ver y cargar turnos desde {DIAS_HISTORIA} días atrás hasta {DIAS_ADELANTE} días adelante. Hoy eso es del {b(desde)} al {b(hasta)}. El rango se corre solo cada día.</p>
-            <p>Fuera de ese rango, las flechas se desactivan y el calendario no deja elegir la fecha.</p>
-          </Seccion>
+- **Reservar / cancelar**: desde hoy hasta el último día del mes próximo.
+- **Días anteriores a hoy**: solo consulta. La app avisa "Solo se puede reservar/cancelar turnos del día o posteriores." y la base rechaza cualquier cambio.
+- **Historial**: se ven los últimos 90 días; lo más viejo se borra solo cada vez que alguien cambia un turno.
 
-          <Seccion titulo="Borrado automático">
-            <p>Los turnos de más de {DIAS_HISTORIA} días se borran solos de la base, y no se pueden recuperar. Así la base no crece sin límite.</p>
-            <p>Si necesitás guardar cómo quedó un día, descargá su imagen antes de que se cumpla ese plazo.</p>
-          </Seccion>
+Las reglas están en dos lugares: `src/config/limites.ts` (la app) y `reservas_defensores__dias_historia()` /
+`reservas_defensores__fecha_maxima()` en el script (la base).
 
-          <Seccion titulo="Si algo no anda">
-            <p>{b('"La sesión se cerró"')}: cambió la contraseña o pasaron los 60 días. Volvé a ingresar.</p>
-            <p>{b('"No se pudo guardar el cambio"')}: se cortó la conexión. El turno vuelve a como estaba; tocalo de nuevo cuando tengas señal.</p>
-            <p>{b('No aparece el botón de compartir')}: ese navegador no lo permite. Usá {b('Descargar imagen')} y mandala desde WhatsApp.</p>
-          </Seccion>
-        </div>
-      </div>
-    </div>
-  )
-}
+## Cambiar canchas, horarios o teléfonos
+
+Canchas y horarios están en `src/config/complejos.ts`. Los teléfonos de la imagen se editan desde la app
+(pestaña Imagen → Contactos de la imagen).
+
+## Cambiar la contraseña
+
+```sql
+update public.reservas_defensores_acceso
+   set clave_hash = extensions.crypt('ClaveNueva', extensions.gen_salt('bf', 10))
+ where usuario = 'DEFENSORES';
+delete from public.reservas_defensores_sesiones where usuario = 'DEFENSORES'; -- cierra las sesiones abiertas
+```
+
+No hace falta volver a publicar la app.
+
+## Correr local
+
+```bash
+cp .env.example .env   # completar URL y anon key
+npm install
+npm run dev
+```
