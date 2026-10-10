@@ -697,7 +697,7 @@ create table if not exists public.reservas_defensores_bloqueos (
   desde            date not null,
   hasta            date not null,
   horas            text[],                       -- null = todo el día
-  motivo           text not null check (motivo in ('reparacion', 'evento', 'otro')),
+  motivo           text not null check (motivo in ('reparacion', 'evento', 'torneo', 'clases', 'otro')),
   nota             text check (nota is null or char_length(nota) <= 60),
   creado_por       text,
   creado           timestamptz not null default now(),
@@ -737,7 +737,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select case b.motivo when 'reparacion' then 'Reparación' when 'evento' then 'Evento' else 'Otro' end
+  select case b.motivo when 'reparacion' then 'Reparación' when 'evento' then 'Evento' when 'torneo' then 'Torneo' when 'clases' then 'Clases' else 'Otro' end
     from public.reservas_defensores_bloqueos b
    where b.complejo = p_complejo
      and p_fecha between b.desde and b.hasta
@@ -976,7 +976,7 @@ begin
   if p_hasta < public.reservas_defensores__hoy() then
     raise exception 'El bloqueo tiene que incluir hoy o días posteriores.' using errcode = '22023';
   end if;
-  if p_motivo not in ('reparacion', 'evento', 'otro') then
+  if p_motivo not in ('reparacion', 'evento', 'torneo', 'clases', 'otro') then
     raise exception 'Elegí un motivo.' using errcode = '22023';
   end if;
   if v_horas is not null and exists (select 1 from unnest(v_horas) h where h !~ '^[0-2][0-9]:[0-5][0-9]$') then
@@ -1047,3 +1047,20 @@ begin
     alter publication supabase_realtime add table public.reservas_defensores_bloqueos;
   end if;
 end $$;
+
+-- motivos (migración 003): por si la tabla ya existía con el control viejo
+do $$
+declare
+  r record;
+begin
+  for r in
+    select conname from pg_constraint
+     where conrelid = 'public.reservas_defensores_bloqueos'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%motivo%'
+  loop
+    execute format('alter table public.reservas_defensores_bloqueos drop constraint %I', r.conname);
+  end loop;
+end $$;
+
+alter table public.reservas_defensores_bloqueos
+  add constraint reservas_defensores_bloqueos_motivo_check
+  check (motivo in ('reparacion', 'evento', 'torneo', 'clases', 'otro'));
